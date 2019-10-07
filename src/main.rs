@@ -12,6 +12,7 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL };
 use rand::Rng;
 use rand::seq::SliceRandom;
+use std::env::Args;
 
 // It works which is cool
 // Performance is bad
@@ -31,23 +32,19 @@ fn cell_colour(c: Cell) -> [f32; 4] {
     }
 }
 
+// Concerns only nitty gritty app stuff 
 pub struct App {
-    gl: GlGraphics, // OpenGL drawing backend.
-    gx: usize,
-    gy: usize,
-    cells: Vec<Cell>,
-    gen: i32,
-    params: SimParameters,
+    gl: GlGraphics,
+    model: Model,
     frame_period: f64,
     step_period: f64,
     time_since_step: f64,
 }
 
-// There would be a pretty easy way to make prey work on similar rules like if it had a food value and ate grass every time
-// could do this with a bunch of tuples / vectors for different species that eat each other lol. maybe just a match function that tells you what square it eats
 
-#[derive(Clone, Copy)]
-pub struct SimParameters {
+// Concerns aspect of the simulation model, things that step
+#[derive(Clone, Default)]
+pub struct Model {
     predator_reproduce_threshold: f32,
     predator_reproduce_cost: f32,
     predator_live_cost: f32,
@@ -56,7 +53,16 @@ pub struct SimParameters {
     prey_food_value: f32,
     prey_reproduce_chance: f32,
     prey_starting_percent: f32,
+
+    gx: usize,
+    gy: usize,
+    cells: Vec<Cell>,
 }
+
+// There would be a pretty easy way to make prey work on similar rules like if it had a food value and ate grass every time
+// could do this with a bunch of tuples / vectors for different species that eat each other lol. maybe just a match function that tells you what square it eats
+
+
 
 impl App {
     fn update(&mut self, args: &UpdateArgs) {
@@ -165,7 +171,6 @@ impl App {
             for i in 0..self.gx * self.gy {
                 let ix = (i % self.gx) as f64;
                 let iy = (i / self.gx) as f64;
-                //let iy = (i / self.gy) as f64;
                 let col = cell_colour(self.cells[i as usize]);
 
                 self.gl.draw(args.viewport(), |c, gl| {
@@ -176,6 +181,12 @@ impl App {
             });
         }
     }
+}
+
+fn make_app_from_args(gl: GlGraphics, args: Args) -> App {
+    let mut a = App;
+
+
 }
 
 fn make_app(gl: GlGraphics, gx: usize, gy: usize, params: SimParameters, fps: f64, sps: f64) -> App {
