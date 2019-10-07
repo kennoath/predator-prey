@@ -63,18 +63,23 @@ impl App {
         self.time_since_step += args.dt;
         if self.time_since_step > self.step_period {
             self.time_since_step = 0.0;
-            self.step();
+            let (gen, pop_pred, pop_prey) = self.step();
+            println!("Generation {}: ppred: {}, pprey: {}", gen, pop_pred, pop_prey);
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> (i32, i32, i32) {
         self.gen += 1;
         let mut rng = rand::thread_rng();
+        let mut acc_pred = 0;
+        let mut acc_prey = 0;
 
         for i in 0..self.gx * self.gy {
             let c = self.cells[i as usize];
+
             match c {
                 Cell::Predator(f) => {
+                    acc_pred += 1;
                     let mut new_f = f - self.params.predator_live_cost;
                     let dest_index = self.get_random_neighbouring_index(i);
                     let other_c = self.cells[dest_index];
@@ -106,6 +111,7 @@ impl App {
                     }
                 }
                 Cell::Prey => {
+                    acc_prey += 1;
                     let r: f32 = rng.gen();
                     let dest_index = self.get_random_neighbouring_index(i);
                     let other_c = self.cells[dest_index];
@@ -125,6 +131,7 @@ impl App {
                 Cell::Empty => ()
             }
         }
+        (self.gen, acc_pred, acc_prey)
 
     }
 
