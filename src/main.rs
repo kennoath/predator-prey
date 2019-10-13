@@ -3,6 +3,8 @@ extern crate graphics;
 extern crate glutin_window;
 extern crate opengl_graphics;
 extern crate rand;
+extern crate serde;
+extern crate serde_yaml;
 
 
 use piston::window::WindowSettings;
@@ -13,6 +15,10 @@ use opengl_graphics::{ GlGraphics, OpenGL };
 use rand::Rng;
 use rand::seq::SliceRandom;
 use std::env::Args;
+use std::fs::File;
+use std::fs;
+use std::io;
+use serde::{Serialize, Deserialize};
 
 // It works which is cool
 // Performance is bad
@@ -33,6 +39,7 @@ fn cell_colour(c: Cell) -> [f32; 4] {
 }
 
 // Concerns only nitty gritty app stuff 
+
 pub struct App {
     gl: GlGraphics,
     
@@ -44,8 +51,10 @@ pub struct App {
     time_since_step: f64,
 }
 
+
+
 // Concerns immutable aspects of the simulation
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub struct ModelParams {
     predator_reproduce_threshold: f32,
     predator_reproduce_cost: f32,
@@ -58,6 +67,18 @@ pub struct ModelParams {
     gx: usize,
     gy: usize,
 }
+/*
+    let params = SimParameters {
+        predator_reproduce_threshold: 0.8,
+        predator_reproduce_cost: 0.4,
+        predator_live_cost: 0.03,
+        predator_starting_food: 0.7,
+        predator_starting_percent: 0.1,
+        prey_food_value: 0.2,
+        prey_reproduce_chance: 0.1,
+        prey_starting_percent: 0.2,
+    };
+    */
 
 // Concerns the mutable state of the simulation
 #[derive(Clone, Default)]
@@ -85,7 +106,7 @@ impl ModelState {
             match c {
                 Cell::Predator(f) => {
                     acc_pred += 1;
-                    let mut new_f = f - params.predator_live_cost;
+                    let new_f = f - params.predator_live_cost;
                     if new_f > 0.0 {
                         c = Cell::Predator(new_f);
                     } else {
@@ -95,6 +116,7 @@ impl ModelState {
                 Cell::Prey => {
                     acc_prey += 1;
                 }
+                _ => ()
             }
 
             // Other update
@@ -102,7 +124,7 @@ impl ModelState {
 
                 // Predator eats prey
                 (Cell::Predator(f), Cell::Prey) => {
-                    let new_f = f + params.prey_food_value;
+                    let mut new_f = f + params.prey_food_value;
                     if new_f > params.predator_reproduce_threshold {
                         self.cells[i] = Cell::Predator(params.predator_starting_food);
                         new_f -= params.predator_reproduce_cost;
@@ -116,7 +138,7 @@ impl ModelState {
 
                 // Predator moves
                 (Cell::Predator(f), Cell::Empty) => {
-                    let new_f = f;
+                    let mut new_f = f;
                     if new_f > params.predator_reproduce_threshold {
                         self.cells[i] = Cell::Predator(params.predator_starting_food);
                         new_f -= params.predator_reproduce_cost;
@@ -205,59 +227,33 @@ impl App {
     }
 }
 
-fn make_app_from_args(gl: GlGraphics, args: Args) -> App {
+fn make_app(gl: GlGraphics, gx: usize, gy: usize, params: ModelParams, fps: f64, sps: f64) -> App {
     let mut a = App {
         gl: gl,
-        
-        params: ModelParams{..Default::default()},
-        state: ModelState{..Default::default()},
-
-        frame_period: 0.0,
-        step_period: 0.0,
-        time_since_step: 0.0,
-    };
-
-    /*
-    "--predator_live_cost=0.01"
-    this is getting verbose, probably implement default for the parameters struct and then make these available to change it
-    params_from_args would be a cleaner more functional way to implement the model
-    */
-
-    for arg in args {
-        match arg {
-
-        }
-    }
-
-    return a;
-}
-
-fn make_app(gl: GlGraphics, gx: usize, gy: usize, params: SimParameters, fps: f64, sps: f64) -> App {
-    let mut a = App {
-        gl: gl,
-        gx: gx,
-        gy: gy,
-        cells: Vec::with_capacity((gx*gy) as usize),
-        gen: 0,
+        state: ModelState {
+            cells: Vec::with_capacity((gx*gy) as usize),
+            gen: 0,
+            numPreds: 0,
+            numPrey: 0,
+        },
         params: params,
         frame_period: 1.0/fps,
         step_period: 1.0/sps,
         time_since_step: 0.0,
     };
+
     for _i in 0..gx*gy {
         let r: f32 = rand::thread_rng().gen();
         if r < params.predator_starting_percent {
-            a.cells.push(Cell::Predator(params.predator_starting_food));
+            a.state.cells.push(Cell::Predator(params.predator_starting_food));
         } else if r < params.predator_starting_percent + params.prey_starting_percent {
-            a.cells.push(Cell::Prey);
+            a.state.cells.push(Cell::Prey);
         } else {
-            a.cells.push(Cell::Empty);
+            a.state.cells.push(Cell::Empty);
         }
     }
     return a
 }
-
-
 
 fn main() {
     // Change this to OpenGL::V2_1 if not working.
@@ -273,8 +269,7 @@ fn main() {
         .build()
         .unwrap();
 
-    // Create a new game and run it.
-    let params = SimParameters {
+    let defaultParams = ModelParams {
         predator_reproduce_threshold: 0.8,
         predator_reproduce_cost: 0.4,
         predator_live_cost: 0.03,
@@ -283,8 +278,24 @@ fn main() {
         prey_food_value: 0.2,
         prey_reproduce_chance: 0.1,
         prey_starting_percent: 0.2,
+        gx: 40,
+        gy: 40,
     };
 
+    let params = match fs::read_to_string("settings.yaml") {
+        Ok(s) => {
+            serde_yaml::from_str(s.as_str()).unwrap()
+        },
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
+            println!("Settings not found, creating...");
+            fs::write("settings.yaml", serde_yaml::to_string(&defaultParams).unwrap().as_bytes()).unwrap();
+            defaultParams
+        },
+        Err(e) => panic!("Something's wrong with your settings file"),
+    };
+
+
+    // Create a new game and run it.
     let mut app = make_app(GlGraphics::new(opengl), 60, 60, params, 60.0, 10.0);
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
