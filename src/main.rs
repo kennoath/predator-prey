@@ -14,14 +14,8 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL };
 use rand::Rng;
 use rand::seq::SliceRandom;
-use std::env::Args;
-use std::fs::File;
 use std::fs;
-use std::io;
 use serde::{Serialize, Deserialize};
-
-// It works which is cool
-// Performance is bad
 
 #[derive(Clone, Copy)]
 pub enum Cell {
@@ -67,18 +61,6 @@ pub struct ModelParams {
     gx: usize,
     gy: usize,
 }
-/*
-    let params = SimParameters {
-        predator_reproduce_threshold: 0.8,
-        predator_reproduce_cost: 0.4,
-        predator_live_cost: 0.03,
-        predator_starting_food: 0.7,
-        predator_starting_percent: 0.1,
-        prey_food_value: 0.2,
-        prey_reproduce_chance: 0.1,
-        prey_starting_percent: 0.2,
-    };
-    */
 
 // Concerns the mutable state of the simulation
 #[derive(Clone, Default)]
@@ -88,7 +70,6 @@ pub struct ModelState {
     numPreds: i32,
     numPrey: i32,
 }
-
 
 impl ModelState {
     fn step(&mut self, params: ModelParams) {
@@ -192,10 +173,6 @@ impl ModelState {
     }
 }
 
-// There would be a pretty easy way to make prey work on similar rules like if it had a food value and ate grass every time
-// could do this with a bunch of tuples / vectors for different species that eat each other lol. maybe just a match function that tells you what square it eats
-
-
 impl App {
     fn update(&mut self, args: &UpdateArgs) {
         self.time_since_step += args.dt;
@@ -293,7 +270,6 @@ fn main() {
         },
         Err(e) => panic!("Something's wrong with your settings file"),
     };
-
 
     // Create a new game and run it.
     let mut app = make_app(GlGraphics::new(opengl), 60, 60, params, 60.0, 10.0);
